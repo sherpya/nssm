@@ -544,7 +544,7 @@ static inline int write_timestamp(logger_t *logger, unsigned long charsize, unsi
   wchar_t *utf16;
   unsigned long utf16len;
   if (to_utf16(timestamp, &utf16, &utf16len)) return -1;
-  int ret = try_write(logger, (void *) *utf16, utf16len * sizeof(wchar_t), out, complained);
+  int ret = try_write(logger, (void *) utf16, utf16len * sizeof(wchar_t), out, complained);
   HeapFree(GetProcessHeap(), 0, utf16);
   return ret;
 }

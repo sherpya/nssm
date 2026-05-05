@@ -329,4 +329,5 @@ int _tmain(int argc, TCHAR **argv) {
 
   /* And nothing more to do */
   nssm_exit(0);
+  return 0;
 }
