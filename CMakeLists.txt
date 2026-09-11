@@ -74,7 +74,63 @@ endif()
 # stored as UTF-16 LE without a BOM, which both mc.exe (with -u) and
 # windmc accept.
 if(NOT MC_COMPILER)
-    find_program(MC_COMPILER NAMES mc.exe REQUIRED)
+    # Unlike rc.exe, mc.exe is not a compiler managed by CMake's Visual
+    # Studio generator.  find_program() therefore does not automatically
+    # search the Windows SDK selected by the generator.
+    string(TOLOWER "${CMAKE_HOST_SYSTEM_PROCESSOR}" MC_HOST_PROCESSOR)
+    if(MC_HOST_PROCESSOR MATCHES "arm64|aarch64")
+        set(MC_HOST_ARCH arm64)
+    elseif(MC_HOST_PROCESSOR MATCHES "amd64|x86_64")
+        set(MC_HOST_ARCH x64)
+    else()
+        set(MC_HOST_ARCH x86)
+    endif()
+
+    set(WINDOWS_SDK_ROOTS)
+    if(DEFINED ENV{WindowsSdkDir})
+        list(APPEND WINDOWS_SDK_ROOTS "$ENV{WindowsSdkDir}")
+    endif()
+    if(DEFINED ENV{ProgramFiles\(x86\)})
+        list(APPEND WINDOWS_SDK_ROOTS
+            "$ENV{ProgramFiles\(x86\)}/Windows Kits/10")
+    endif()
+    list(REMOVE_DUPLICATES WINDOWS_SDK_ROOTS)
+
+    set(MC_HINTS)
+    if(CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION)
+        foreach(WINDOWS_SDK_ROOT IN LISTS WINDOWS_SDK_ROOTS)
+            list(APPEND MC_HINTS
+                "${WINDOWS_SDK_ROOT}/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/${MC_HOST_ARCH}")
+        endforeach()
+    endif()
+
+    # Keep PATH lookup working, but also check the SDK selected by Visual
+    # Studio.  This makes configuration from cmake-gui work without a
+    # Developer Command Prompt.
+    find_program(MC_COMPILER NAMES mc.exe HINTS ${MC_HINTS})
+
+    # Non-Visual-Studio generators may not expose an SDK version.  Fall back
+    # to the newest installed SDK containing a native message compiler.
+    if(NOT MC_COMPILER)
+        set(MC_CANDIDATES)
+        foreach(WINDOWS_SDK_ROOT IN LISTS WINDOWS_SDK_ROOTS)
+            file(GLOB WINDOWS_SDK_MC_CANDIDATES
+                "${WINDOWS_SDK_ROOT}/bin/*/${MC_HOST_ARCH}/mc.exe")
+            list(APPEND MC_CANDIDATES ${WINDOWS_SDK_MC_CANDIDATES})
+        endforeach()
+        if(MC_CANDIDATES)
+            list(SORT MC_CANDIDATES COMPARE NATURAL ORDER DESCENDING)
+            list(GET MC_CANDIDATES 0 MC_COMPILER)
+            set(MC_COMPILER "${MC_COMPILER}" CACHE FILEPATH
+                "Path to the Windows message compiler" FORCE)
+        endif()
+    endif()
+
+    if(NOT MC_COMPILER)
+        message(FATAL_ERROR
+            "Could not find mc.exe. Install the Windows SDK or set "
+            "MC_COMPILER to its full path.")
+    endif()
 endif()
 
 set(MESSAGES_HEADER "${CMAKE_CURRENT_BINARY_DIR}/messages.h")
