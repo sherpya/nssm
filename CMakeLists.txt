@@ -74,6 +74,20 @@ endif()
 # stored as UTF-16 LE without a BOM, which both mc.exe (with -u) and
 # windmc accept.
 if(NOT MC_COMPILER)
+    # MinGW ships windmc alongside windres.  Derive its name and location
+    # from the resource compiler so cross builds do not have to duplicate
+    # this setting in every toolchain file.
+    if(MINGW AND CMAKE_RC_COMPILER)
+        get_filename_component(MC_MINGW_DIR "${CMAKE_RC_COMPILER}" DIRECTORY)
+        get_filename_component(MC_MINGW_NAME "${CMAKE_RC_COMPILER}" NAME)
+        if(MC_MINGW_NAME MATCHES "windres(\\.exe)?$")
+            string(REGEX REPLACE "windres(\\.exe)?$" "windmc\\1"
+                MC_MINGW_NAME "${MC_MINGW_NAME}")
+            find_program(MC_COMPILER NAMES "${MC_MINGW_NAME}" windmc
+                HINTS "${MC_MINGW_DIR}")
+        endif()
+    endif()
+
     # Unlike rc.exe, mc.exe is not a compiler managed by CMake's Visual
     # Studio generator.  find_program() therefore does not automatically
     # search the Windows SDK selected by the generator.
@@ -107,7 +121,9 @@ if(NOT MC_COMPILER)
     # Keep PATH lookup working, but also check the SDK selected by Visual
     # Studio.  This makes configuration from cmake-gui work without a
     # Developer Command Prompt.
-    find_program(MC_COMPILER NAMES mc.exe HINTS ${MC_HINTS})
+    if(NOT MC_COMPILER)
+        find_program(MC_COMPILER NAMES mc.exe HINTS ${MC_HINTS})
+    endif()
 
     # Non-Visual-Studio generators may not expose an SDK version.  Fall back
     # to the newest installed SDK containing a native message compiler.
@@ -128,8 +144,8 @@ if(NOT MC_COMPILER)
 
     if(NOT MC_COMPILER)
         message(FATAL_ERROR
-            "Could not find mc.exe. Install the Windows SDK or set "
-            "MC_COMPILER to its full path.")
+            "Could not find a message compiler (windmc for MinGW or mc.exe "
+            "from the Windows SDK). Set MC_COMPILER to its full path.")
     endif()
 endif()
 
